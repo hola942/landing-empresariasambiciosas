@@ -38,39 +38,13 @@ function createMcpServer() {
   return server;
 }
 
-// --- Streamable HTTP (claude.ai web) ---
-const httpTransports = {};
-
+// --- Streamable HTTP (claude.ai web) — modo stateless ---
 app.post('/mcp', async (req, res) => {
-  const sessionId = req.headers['mcp-session-id'];
-  let transport = httpTransports[sessionId];
-
-  if (!transport) {
-    transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => crypto.randomUUID() });
-    const server = createMcpServer();
-    await server.connect(transport);
-    httpTransports[transport.sessionId] = transport;
-    res.on('close', () => delete httpTransports[transport.sessionId]);
-  }
-
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  const server = createMcpServer();
+  await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
-});
-
-app.get('/mcp', async (req, res) => {
-  const sessionId = req.headers['mcp-session-id'];
-  const transport = httpTransports[sessionId];
-  if (!transport) return res.status(404).json({ error: 'Session not found' });
-  await transport.handleRequest(req, res);
-});
-
-app.delete('/mcp', async (req, res) => {
-  const sessionId = req.headers['mcp-session-id'];
-  const transport = httpTransports[sessionId];
-  if (transport) {
-    await transport.close();
-    delete httpTransports[sessionId];
-  }
-  res.status(200).end();
+  await server.close();
 });
 
 // --- SSE (Claude Desktop) ---
